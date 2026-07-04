@@ -12,7 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-@SpringBootTest
+@SpringBootTest(classes = [TestApplication::class])
 class DataFixtureManagerTest {
   @MockkBean
   lateinit var referenceRepository: ReferenceRepository

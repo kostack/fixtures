@@ -12,6 +12,8 @@ plugins {
   jacoco
 }
 
+val springShellVersion = "3.4.0"
+
 group = "io.github.kostack"
 version = providers.gradleProperty("projectVersion").getOrElse("1.0.0")
 description = "Data fixtures"
@@ -33,28 +35,29 @@ dependencyManagement {
 }
 
 dependencies {
+  // API
+  api("org.springframework:spring-context")
+  api("org.springframework.boot:spring-boot-autoconfigure")
+  api("net.datafaker:datafaker:2.7.0")
+
+  // Implementation
+  implementation("org.fusesource.jansi:jansi:2.4.2")
+
   // Kotlin
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 
-  implementation("org.springframework.boot:spring-boot-starter-webflux")
-  implementation("org.springframework.boot:spring-boot-configuration-processor")
-
-  compileOnly("org.springframework.shell:spring-shell-starter:3.4.0")
-  runtimeOnly("org.springframework.shell:spring-shell-starter:3.4.0")
-  testImplementation("org.springframework.shell:spring-shell-starter:3.4.0")
+  compileOnly("org.springframework.shell:spring-shell-starter:$springShellVersion")
+  runtimeOnly("org.springframework.shell:spring-shell-starter:$springShellVersion")
+  testImplementation("org.springframework.shell:spring-shell-starter:$springShellVersion")
 
   testImplementation("org.springframework.boot:spring-boot-starter-test")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
   testImplementation("io.mockk:mockk:1.14.11")
   testImplementation("com.ninja-squad:springmockk:5.0.1")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
-  testFixturesImplementation(kotlin("stdlib"))
   testImplementation(kotlin("test"))
 
-  api("net.datafaker:datafaker:2.7.0")
-  implementation("org.fusesource.jansi:jansi:2.4.2")
-
+  testFixturesImplementation(kotlin("stdlib"))
   testFixturesImplementation("org.springframework.boot:spring-boot-starter-webflux")
   testFixturesImplementation("org.springframework.boot:spring-boot-autoconfigure")
 }

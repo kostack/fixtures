@@ -2,9 +2,7 @@ package io.github.kostack.fixtures
 
 import org.fusesource.jansi.Ansi.ansi
 import org.springframework.context.ApplicationEventPublisher
-import org.springframework.stereotype.Component
 
-@Component
 class DataFixtureManager(
   private val fixtures: List<AbstractFixture>,
   private val referenceRepository: ReferenceRepository,

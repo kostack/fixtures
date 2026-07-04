@@ -1,8 +1,5 @@
 package io.github.kostack.fixtures
 
-import org.springframework.stereotype.Component
-
-@Component
 class ReferenceRepository {
   private val references = mutableMapOf<String, Any>()
 
