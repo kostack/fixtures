@@ -46,8 +46,7 @@ dependencies {
   // Kotlin
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 
-  compileOnly("org.springframework.shell:spring-shell-starter:$springShellVersion")
-  runtimeOnly("org.springframework.shell:spring-shell-starter:$springShellVersion")
+  implementation("org.springframework.shell:spring-shell-starter:$springShellVersion")
   testImplementation("org.springframework.shell:spring-shell-starter:$springShellVersion")
 
   testImplementation("org.springframework.boot:spring-boot-starter-test")
