@@ -1,19 +1,17 @@
 package io.github.kostack.fixtures
 
 import kotlinx.coroutines.runBlocking
-import org.springframework.shell.command.annotation.Option
-import org.springframework.shell.standard.ShellComponent
-import org.springframework.shell.standard.ShellMethod
+import org.springframework.shell.core.command.annotation.Command
+import org.springframework.shell.core.command.annotation.Option
 
-@ShellComponent
 class LoadFixturesCommand(
   private val fixtureService: DataFixtureManager
 ) {
-  @ShellMethod(key = ["data-fixtures:load"], value = "Loads fixtures")
+  @Command(name = ["data-fixtures:load"], description = "Loads fixtures")
   fun loadFixtures(
     @Option(
-      longNames = ["dropDatabase"],
-      shortNames = ['d'],
+      longName = "dropDatabase",
+      shortName = 'd',
       defaultValue = "true",
       description = "Whether to drop the database before loading fixtures"
     )

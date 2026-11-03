@@ -12,7 +12,7 @@ plugins {
   jacoco
 }
 
-val springShellVersion = "3.4.0"
+val springShellVersion = "4.0.3"
 
 group = "io.github.kostack"
 version = providers.gradleProperty("projectVersion").getOrElse("1.0.0")
@@ -20,7 +20,7 @@ description = "Data fixtures"
 
 java {
   toolchain {
-    languageVersion = JavaLanguageVersion.of(23)
+    languageVersion = JavaLanguageVersion.of(25)
   }
 }
 
@@ -31,14 +31,23 @@ repositories {
 dependencyManagement {
   imports {
     mavenBom(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
+    mavenBom("org.springframework.shell:spring-shell-dependencies:$springShellVersion")
   }
 }
 
 dependencies {
   // API
-  api("org.springframework:spring-context")
-  api("org.springframework.boot:spring-boot-autoconfigure")
   api("net.datafaker:datafaker:2.7.0")
+
+  // Applications supply their own Spring Boot starters.
+  listOf(
+    "org.springframework:spring-context",
+    "org.springframework.boot:spring-boot-autoconfigure"
+  ).forEach {
+    compileOnly(it)
+    testImplementation(it)
+    testFixturesImplementation(it)
+  }
 
   // Implementation
   implementation("org.fusesource.jansi:jansi:2.4.2")
@@ -46,8 +55,8 @@ dependencies {
   // Kotlin
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 
-  implementation("org.springframework.shell:spring-shell-starter:$springShellVersion")
-  testImplementation("org.springframework.shell:spring-shell-starter:$springShellVersion")
+  // Shell
+  implementation("org.springframework.shell:spring-shell-starter-jni")
 
   testImplementation("org.springframework.boot:spring-boot-starter-test")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -58,7 +67,8 @@ dependencies {
 
   testFixturesImplementation(kotlin("stdlib"))
   testFixturesImplementation("org.springframework.boot:spring-boot-starter-webflux")
-  testFixturesImplementation("org.springframework.boot:spring-boot-autoconfigure")
+  testFixturesImplementation("org.springframework.shell:spring-shell-core-autoconfigure")
+  testFixturesImplementation("org.springframework.shell:spring-shell-jline")
 }
 
 kotlin {
@@ -100,7 +110,7 @@ tasks.named<Test>("test") {
     events("passed", "skipped", "failed")
     showStandardStreams = true
   }
-  jvmArgs("-XX:+EnableDynamicAgentLoading")
+  jvmArgs("-XX:+EnableDynamicAgentLoading", "--enable-native-access=ALL-UNNAMED")
 }
 
 tasks.named<JacocoReport>("jacocoTestReport") {

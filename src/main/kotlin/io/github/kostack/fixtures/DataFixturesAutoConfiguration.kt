@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Bean
-import org.springframework.shell.standard.ShellMethod
+import org.springframework.shell.core.command.Command
 
 @AutoConfiguration
 class DataFixturesAutoConfiguration {
@@ -23,7 +23,7 @@ class DataFixturesAutoConfiguration {
   ) = DataFixtureManager(fixtures, referenceRepository, purger, eventPublisher)
 
   @Bean
-  @ConditionalOnClass(ShellMethod::class)
+  @ConditionalOnClass(Command::class)
   @ConditionalOnBean(DataFixtureManager::class)
   @ConditionalOnMissingBean
   fun loadFixturesCommand(fixtureService: DataFixtureManager) = LoadFixturesCommand(fixtureService)
