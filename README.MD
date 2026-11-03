@@ -4,10 +4,13 @@ A Kotlin/Spring Boot library for managing and loading test data fixtures. It pro
 
 ## Installation
 
-Add the dependency to your `build.gradle.kts`:
+The current build targets Java 25 and uses Spring Boot 4.1.0 and Spring Shell 4.0.3.
+
+Add the dependency alongside your application's Spring Boot starter in `build.gradle.kts`:
 
 ```kotlin
 dependencies {
+    implementation("org.springframework.boot:spring-boot-starter")
     implementation("io.github.kostack:fixtures:<version>")
 }
 ```
@@ -16,11 +19,25 @@ Or `pom.xml`:
 
 ```xml
 <dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter</artifactId>
+</dependency>
+<dependency>
     <groupId>io.github.kostack</groupId>
     <artifactId>fixtures</artifactId>
     <version>VERSION</version>
 </dependency>
 ```
+
+Use your application's existing Spring Boot dependency management. A more specific starter, such as WebFlux, can supply the Spring dependencies instead of `spring-boot-starter`.
+
+The library declares Spring context and Boot auto-configuration as `compileOnly`; applications supply these through their own starters. Spring Shell is included through `spring-shell-starter-jni`, with its dependencies managed by the Spring Shell 4.0.3 BOM in this project's build.
+
+## Auto-configuration
+
+Spring Boot discovers `DataFixturesAutoConfiguration` automatically. It registers a `ReferenceRepository` and creates a `DataFixtureManager` when a `Purger` bean is available, collecting the application's `AbstractFixture` beans.
+
+When the manager and Spring Shell command API are available, auto-configuration also registers `LoadFixturesCommand`, unless the application already provides that bean. Shell discovers its `@Command` method on the registered bean; the command class does not need `@Component` or component scanning. Application fixtures and purgers still need to be registered as beans, for example with `@Component`.
 
 ---
 
@@ -102,9 +119,11 @@ class ProjectFixture(
 }
 ```
 
-> **Note:** Fixture loading is sequential, so load order matters. Ensure the fixture that sets a reference is loaded before the one that reads it (e.g., via Spring's `@DependsOn` or by ordering beans).
+> **Note:** Fixture loading is sequential, so load order matters. Ensure the fixture that sets a reference is loaded before the one that reads it, for example by using Spring's `@Order` on fixture classes (lower values load first).
 
-> **Note:** `setReference` throws `IllegalArgumentException` if the same name is registered twice. `getReference` throws if the name does not exist.
+`ReferenceRepository` uses a `ConcurrentHashMap` for concurrent reads and writes. Registering a name is atomic: if concurrent callers register the same name, one succeeds and the others receive `IllegalArgumentException`. Existing values are preserved. `getReference` throws `IllegalStateException` if the name does not exist. Stored objects themselves must be safe for any concurrent use by the application.
+
+Each `loadFixtures()` call resets all references before purging or loading. Run fixture-loading operations one at a time: the thread-safe map does not isolate overlapping runs, and a reset can clear another run's references.
 
 ---
 
@@ -165,7 +184,7 @@ dataFixtureManager.dropDatabase()
 
 ## Loading Fixtures via Shell Command
 
-The library registers a Spring Shell command `data-fixtures:load`:
+With a `Purger` bean available, the library registers the Spring Shell 4 command `data-fixtures:load`. The `dropDatabase` option defaults to `true` and supports both `--dropDatabase` and `-d`:
 
 ```shell
 # Drop the database and load all fixtures (default)
@@ -175,6 +194,14 @@ shell:> data-fixtures:load
 shell:> data-fixtures:load --dropDatabase false
 shell:> data-fixtures:load -d false
 ```
+
+When launching an application that uses Shell's JLine terminal on Java 25, enable native access for its JVM:
+
+```shell
+java --enable-native-access=ALL-UNNAMED -jar application.jar
+```
+
+For IDE launches, add `--enable-native-access=ALL-UNNAMED` to the run configuration's VM options. This project's Gradle test task already includes the flag.
 
 ---
 
