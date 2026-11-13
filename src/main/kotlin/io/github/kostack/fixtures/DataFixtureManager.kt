@@ -12,9 +12,7 @@ class DataFixtureManager(
   suspend fun loadFixtures(dropDatabase: Boolean) {
     referenceRepository.reset()
 
-    if (dropDatabase) {
-      dropDatabase()
-    }
+    if (dropDatabase) dropDatabase()
 
     eventPublisher.publishEvent(FixtureLoadEvent())
 

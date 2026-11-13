@@ -30,7 +30,9 @@ class LoadFixturesTest {
 
   @ParameterizedTest
   @CsvSource(
-    "data-fixtures:load, true",
+    "data-fixtures:load, false",
+    "data-fixtures:load --dropDatabase true, true",
+    "data-fixtures:load -d true, true",
     "data-fixtures:load --dropDatabase false, false",
     "data-fixtures:load -d false, false"
   )

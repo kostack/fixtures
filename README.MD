@@ -4,14 +4,19 @@ A Kotlin/Spring Boot library for managing and loading test data fixtures. It pro
 
 ## Installation
 
-The current build targets Java 25 and uses Spring Boot 4.1.0 and Spring Shell 4.0.3.
+Requirements: Java 25 and Spring Boot 4.1. The library is built with Kotlin 2.4.21, Spring Boot 4.1.2 and Spring Shell 4.0.3.
 
 Add the dependency alongside your application's Spring Boot starter in `build.gradle.kts`:
 
 ```kotlin
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     implementation("io.github.kostack:fixtures:<version>")
+
+    // Optional: enables the `data-fixtures:load` shell command
+    implementation(platform("org.springframework.shell:spring-shell-dependencies:4.0.3"))
+    implementation("org.springframework.shell:spring-shell-starter-jni")
 }
 ```
 
@@ -23,19 +28,29 @@ Or `pom.xml`:
     <artifactId>spring-boot-starter</artifactId>
 </dependency>
 <dependency>
+    <groupId>org.jetbrains.kotlinx</groupId>
+    <artifactId>kotlinx-coroutines-core</artifactId>
+</dependency>
+<dependency>
     <groupId>io.github.kostack</groupId>
     <artifactId>fixtures</artifactId>
     <version>VERSION</version>
 </dependency>
+<!-- Optional: enables the `data-fixtures:load` shell command -->
+<dependency>
+    <groupId>org.springframework.shell</groupId>
+    <artifactId>spring-shell-starter-jni</artifactId>
+    <version>4.0.3</version>
+</dependency>
 ```
 
-Use your application's existing Spring Boot dependency management. A more specific starter, such as WebFlux, can supply the Spring dependencies instead of `spring-boot-starter`.
+Versions for `kotlinx-coroutines-core` come from your application's Spring Boot dependency management. A more specific starter, such as WebFlux, can supply the Spring dependencies instead of `spring-boot-starter`.
 
-The library declares Spring context and Boot auto-configuration as `compileOnly`; applications supply these through their own starters. Spring Shell is included through `spring-shell-starter-jni`, with its dependencies managed by the Spring Shell 4.0.3 BOM in this project's build.
+The library brings in only Datafaker (exposed as API) and Jansi. Spring context, Boot auto-configuration, Kotlin coroutines and Spring Shell are `compileOnly`; applications supply these through their own dependencies. Spring Shell is optional: without it on the classpath, the fixture manager still works but the `data-fixtures:load` command is not registered.
 
 ## Auto-configuration
 
-Spring Boot discovers `DataFixturesAutoConfiguration` automatically. It registers a `ReferenceRepository` and creates a `DataFixtureManager` when a `Purger` bean is available, collecting the application's `AbstractFixture` beans.
+Spring Boot discovers `AutoConfiguration` automatically. It registers a `ReferenceRepository`, unless the application already provides one, and creates a `DataFixtureManager` when a `Purger` bean is available, collecting the application's `AbstractFixture` beans.
 
 When the manager and Spring Shell command API are available, auto-configuration also registers `LoadFixturesCommand`, unless the application already provides that bean. Shell discovers its `@Command` method on the registered bean; the command class does not need `@Component` or component scanning. Application fixtures and purgers still need to be registered as beans, for example with `@Component`.
 
@@ -154,11 +169,11 @@ The `DataFixtureManager` calls `purger.purge()` automatically when `loadFixtures
 
 ## Loading Fixtures Programmatically
 
-Inject `DataFixtureManager` and call `loadFixtures`:
+Inject `DataFixtureManager` and call `loadFixtures`. The manager exists only when a `Purger` bean is registered:
 
 ```kotlin
 @SpringBootTest
-class MyIntegrationTest(
+class MyIntegrationTest @Autowired constructor(
     private val dataFixtureManager: DataFixtureManager,
 ) {
 
@@ -174,7 +189,7 @@ class MyIntegrationTest(
 }
 ```
 
-To only drop the database without loading fixtures:
+To only drop the database without loading fixtures (a suspend function, like `loadFixtures`):
 
 ```kotlin
 dataFixtureManager.dropDatabase()
@@ -184,15 +199,15 @@ dataFixtureManager.dropDatabase()
 
 ## Loading Fixtures via Shell Command
 
-With a `Purger` bean available, the library registers the Spring Shell 4 command `data-fixtures:load`. The `dropDatabase` option defaults to `true` and supports both `--dropDatabase` and `-d`:
+With a `Purger` bean available, the library registers the Spring Shell 4 command `data-fixtures:load`. The `dropDatabase` option defaults to `false` and supports both `--dropDatabase` and `-d`:
 
 ```shell
-# Drop the database and load all fixtures (default)
+# Load fixtures without dropping the database (default)
 shell:> data-fixtures:load
 
-# Load fixtures without dropping the database
-shell:> data-fixtures:load --dropDatabase false
-shell:> data-fixtures:load -d false
+# Drop the database, then load all fixtures
+shell:> data-fixtures:load --dropDatabase true
+shell:> data-fixtures:load -d true
 ```
 
 When launching an application that uses Shell's JLine terminal on Java 25, enable native access for its JVM:
@@ -232,18 +247,28 @@ class CacheWarmupListener {
 src/
 ├── main/kotlin/com/example/
 │   ├── User.kt
-│   └── UserRepository.kt
+│   ├── UserRepository.kt
+│   ├── Post.kt
+│   └── PostRepository.kt
 └── test/kotlin/com/example/
     ├── fixtures/
+    │   ├── MongoPurger.kt
     │   ├── UserFixture.kt
     │   └── PostFixture.kt
     └── UserIntegrationTest.kt
 ```
 
+`MongoPurger.kt` is the purger from [Implementing a Purger](#implementing-a-purger); without a `Purger` bean, no `DataFixtureManager` is created.
+
 **UserFixture.kt**
 
 ```kotlin
+import io.github.kostack.fixtures.AbstractFixture
+import org.springframework.core.annotation.Order
+import org.springframework.stereotype.Component
+
 @Component
+@Order(1)
 class UserFixture(
     private val userRepository: UserRepository,
 ) : AbstractFixture() {
@@ -263,7 +288,12 @@ class UserFixture(
 **PostFixture.kt**
 
 ```kotlin
+import io.github.kostack.fixtures.AbstractFixture
+import org.springframework.core.annotation.Order
+import org.springframework.stereotype.Component
+
 @Component
+@Order(2) // runs after UserFixture, which sets "default-user"
 class PostFixture(
     private val postRepository: PostRepository,
 ) : AbstractFixture() {
@@ -278,8 +308,17 @@ class PostFixture(
 **UserIntegrationTest.kt**
 
 ```kotlin
+import io.github.kostack.fixtures.DataFixtureManager
+import kotlinx.coroutines.reactor.awaitSingle
+import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+
 @SpringBootTest
-class UserIntegrationTest(
+class UserIntegrationTest @Autowired constructor(
     private val dataFixtureManager: DataFixtureManager,
     private val userRepository: UserRepository,
 ) {
@@ -296,6 +335,16 @@ class UserIntegrationTest(
     }
 }
 ```
+
+---
+
+## Development
+
+```shell
+./gradlew check
+```
+
+`check` runs the tests, enforces 60% JaCoCo coverage and runs the Spotless/ktlint check. Run `./gradlew spotlessApply` to fix formatting. `assemble` and `test` install the `scripts/pre-commit` git hook: if the formatting check fails, it runs `spotlessApply` and aborts the commit so you can stage the fixes.
 
 ---
 

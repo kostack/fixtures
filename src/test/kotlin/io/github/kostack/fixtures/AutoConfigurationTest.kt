@@ -3,13 +3,15 @@ package io.github.kostack.fixtures
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
+import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.shell.core.command.Command
 import java.util.function.Supplier
 
-class DataFixturesAutoConfigurationTest {
+class AutoConfigurationTest {
   private val contextRunner =
     ApplicationContextRunner()
-      .withConfiguration(AutoConfigurations.of(DataFixturesAutoConfiguration::class.java))
+      .withConfiguration(AutoConfigurations.of(AutoConfiguration::class.java))
 
   @Test
   fun `creates reference repository without requiring purger`() {
@@ -20,7 +22,7 @@ class DataFixturesAutoConfigurationTest {
   }
 
   @Test
-  fun `creates own reference repository when another reference repository exists`() {
+  fun `backs off when a reference repository already exists`() {
     val referenceRepository = ReferenceRepository()
 
     contextRunner
@@ -29,7 +31,7 @@ class DataFixturesAutoConfigurationTest {
         ReferenceRepository::class.java,
         Supplier { referenceRepository }
       ).run { context ->
-        assertThat(context).getBeans(ReferenceRepository::class.java).hasSize(2)
+        assertThat(context).hasSingleBean(ReferenceRepository::class.java)
         assertThat(context).getBean("customReferenceRepository").isSameAs(referenceRepository)
       }
   }
@@ -48,6 +50,24 @@ class DataFixturesAutoConfigurationTest {
         assertThat(context).hasSingleBean(ReferenceRepository::class.java)
         assertThat(context).hasSingleBean(DataFixtureManager::class.java)
         assertThat(context).hasSingleBean(LoadFixturesCommand::class.java)
+      }
+  }
+
+  @Test
+  fun `skips shell command when spring shell is not on the classpath`() {
+    contextRunner
+      .withClassLoader(FilteredClassLoader(Command::class.java))
+      .withBean(
+        Purger::class.java,
+        Supplier {
+          object : Purger {
+            override suspend fun purge() = Unit
+          }
+        }
+      ).run { context ->
+        assertThat(context).hasNotFailed()
+        assertThat(context).hasSingleBean(DataFixtureManager::class.java)
+        assertThat(context).doesNotHaveBean(LoadFixturesCommand::class.java)
       }
   }
 }

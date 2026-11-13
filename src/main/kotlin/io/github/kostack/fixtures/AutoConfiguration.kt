@@ -9,12 +9,14 @@ import org.springframework.context.annotation.Bean
 import org.springframework.shell.core.command.Command
 
 @AutoConfiguration
-class DataFixturesAutoConfiguration {
+class AutoConfiguration {
   @Bean
+  @ConditionalOnMissingBean
   fun referenceRepository() = ReferenceRepository()
 
   @Bean
   @ConditionalOnBean(Purger::class)
+  @ConditionalOnMissingBean
   fun dataFixtureManager(
     fixtures: List<AbstractFixture>,
     referenceRepository: ReferenceRepository,

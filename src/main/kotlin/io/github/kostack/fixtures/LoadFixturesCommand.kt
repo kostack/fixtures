@@ -12,7 +12,7 @@ class LoadFixturesCommand(
     @Option(
       longName = "dropDatabase",
       shortName = 'd',
-      defaultValue = "true",
+      defaultValue = "false",
       description = "Whether to drop the database before loading fixtures"
     )
     dropDatabase: Boolean
