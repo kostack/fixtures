@@ -46,13 +46,15 @@ Or `pom.xml`:
 
 Versions for `kotlinx-coroutines-core` come from your application's Spring Boot dependency management. A more specific starter, such as WebFlux, can supply the Spring dependencies instead of `spring-boot-starter`.
 
-The library brings in only Datafaker (exposed as API) and Jansi. Spring context, Boot auto-configuration, Kotlin coroutines and Spring Shell are `compileOnly`; applications supply these through their own dependencies. Spring Shell is optional: without it on the classpath, the fixture manager still works but the `data-fixtures:load` command is not registered.
+The library brings in only Datafaker (exposed as API). Spring context, Boot auto-configuration, Kotlin coroutines and Spring Shell are `compileOnly`; applications supply these through their own dependencies. Spring Shell is optional: without it on the classpath, the fixture manager still works but the `data-fixtures:load` command is not registered.
 
 ## Auto-configuration
 
-Spring Boot discovers `AutoConfiguration` automatically. It registers a `ReferenceRepository`, unless the application already provides one, and creates a `DataFixtureManager` when a `Purger` bean is available, collecting the application's `AbstractFixture` beans.
+Spring Boot discovers `AutoConfiguration` automatically. It registers a `ReferenceRepository`, unless the application already provides one, and a `DataFixtureManager` that collects the application's `AbstractFixture` beans in `@Order` order. A `Purger` bean is optional; it is only needed to drop the database.
 
 When the manager and Spring Shell command API are available, auto-configuration also registers `LoadFixturesCommand`, unless the application already provides that bean. Shell discovers its `@Command` method on the registered bean; the command class does not need `@Component` or component scanning. Application fixtures and purgers still need to be registered as beans, for example with `@Component`.
+
+Progress is logged at `INFO` through Spring's logging (`io.github.kostack.fixtures.DataFixtureManager`), so it follows your application's logging configuration.
 
 ---
 
@@ -63,7 +65,7 @@ When the manager and Spring Shell command API are available, auto-configuration 
 | `AbstractFixture`     | Base class for all fixtures. Implement `load()` to set up data |
 | `DataFixtureManager`  | Orchestrates fixture loading, database purging, and events     |
 | `ReferenceRepository` | In-memory store for sharing objects between fixtures           |
-| `Purger`              | Interface for clearing the database before loading fixtures    |
+| `Purger`              | Optional interface for clearing the database before loading    |
 | `FixtureLoadEvent`    | Spring event published before fixtures are loaded              |
 | `LoadFixturesCommand` | Spring Shell command: `data-fixtures:load`                     |
 
@@ -128,7 +130,7 @@ class ProjectFixture(
 ) : AbstractFixture() {
 
     override suspend fun load() {
-        val org = referenceRepository.getReference("acme-org") as Organization
+        val org = referenceRepository.getReference<Organization>("acme-org")
         projectRepository.save(Project(name = "Alpha", organization = org))
     }
 }
@@ -136,7 +138,7 @@ class ProjectFixture(
 
 > **Note:** Fixture loading is sequential, so load order matters. Ensure the fixture that sets a reference is loaded before the one that reads it, for example by using Spring's `@Order` on fixture classes (lower values load first).
 
-`ReferenceRepository` uses a `ConcurrentHashMap` for concurrent reads and writes. Registering a name is atomic: if concurrent callers register the same name, one succeeds and the others receive `IllegalArgumentException`. Existing values are preserved. `getReference` throws `IllegalStateException` if the name does not exist. Stored objects themselves must be safe for any concurrent use by the application.
+`ReferenceRepository` uses a `ConcurrentHashMap` for concurrent reads and writes. Registering a name is atomic: if concurrent callers register the same name, one succeeds and the others receive `IllegalArgumentException`. Existing values are preserved. `getReference<T>(name)` returns the reference as `T` and throws `IllegalStateException` if the name does not exist or the stored value is not a `T`. Java callers can use `getReference(name, Type.class)`. Stored objects themselves must be safe for any concurrent use by the application.
 
 Each `loadFixtures()` call resets all references before purging or loading. Run fixture-loading operations one at a time: the thread-safe map does not isolate overlapping runs, and a reset can clear another run's references.
 
@@ -144,7 +146,7 @@ Each `loadFixtures()` call resets all references before purging or loading. Run 
 
 ## Implementing a Purger
 
-Implement the `Purger` interface to clear your database before fixtures load:
+Implement the `Purger` interface to clear your database before fixtures load. It is optional: without one, fixtures still load, but dropping the database fails with `IllegalStateException`.
 
 ```kotlin
 import io.github.kostack.fixtures.Purger
@@ -169,7 +171,7 @@ The `DataFixtureManager` calls `purger.purge()` automatically when `loadFixtures
 
 ## Loading Fixtures Programmatically
 
-Inject `DataFixtureManager` and call `loadFixtures`. The manager exists only when a `Purger` bean is registered:
+Inject `DataFixtureManager` and call `loadFixtures`:
 
 ```kotlin
 @SpringBootTest
@@ -199,7 +201,7 @@ dataFixtureManager.dropDatabase()
 
 ## Loading Fixtures via Shell Command
 
-With a `Purger` bean available, the library registers the Spring Shell 4 command `data-fixtures:load`. The `dropDatabase` option defaults to `false` and supports both `--dropDatabase` and `-d`:
+With Spring Shell on the classpath, the library registers the Spring Shell 4 command `data-fixtures:load`. The `dropDatabase` option defaults to `false` and supports both `--dropDatabase` and `-d`:
 
 ```shell
 # Load fixtures without dropping the database (default)
@@ -258,7 +260,7 @@ src/
     └── UserIntegrationTest.kt
 ```
 
-`MongoPurger.kt` is the purger from [Implementing a Purger](#implementing-a-purger); without a `Purger` bean, no `DataFixtureManager` is created.
+`MongoPurger.kt` is the purger from [Implementing a Purger](#implementing-a-purger); it is needed because the test loads fixtures with `dropDatabase = true`.
 
 **UserFixture.kt**
 
@@ -299,7 +301,7 @@ class PostFixture(
 ) : AbstractFixture() {
 
     override suspend fun load() {
-        val user = referenceRepository.getReference("default-user") as User
+        val user = referenceRepository.getReference<User>("default-user")
         postRepository.save(Post(title = faker.lorem().sentence(), author = user))
     }
 }

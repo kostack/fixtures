@@ -1,12 +1,12 @@
 package io.github.kostack.fixtures
 
-import org.fusesource.jansi.Ansi.ansi
+import org.apache.commons.logging.LogFactory
 import org.springframework.context.ApplicationEventPublisher
 
 class DataFixtureManager(
   private val fixtures: List<AbstractFixture>,
   private val referenceRepository: ReferenceRepository,
-  private val purger: Purger,
+  private val purger: Purger?,
   private val eventPublisher: ApplicationEventPublisher
 ) {
   suspend fun loadFixtures(dropDatabase: Boolean) {
@@ -18,12 +18,19 @@ class DataFixtureManager(
 
     for (fixture in fixtures) {
       fixture.load()
-      val name = fixture::class.java.simpleName
-      println(ansi().fgBrightBlue().a("$name loaded.").reset())
+      log.info("${fixture::class.java.simpleName} loaded")
     }
 
-    println(ansi().fgGreen().a("All DataFixtures loaded.").reset())
+    log.info("All fixtures loaded (${fixtures.size})")
   }
 
-  suspend fun dropDatabase() = purger.purge()
+  suspend fun dropDatabase() {
+    val purger = checkNotNull(purger) { "Cannot drop the database: no Purger bean is registered" }
+    log.info("Dropping database")
+    purger.purge()
+  }
+
+  private companion object {
+    private val log = LogFactory.getLog(DataFixtureManager::class.java)
+  }
 }

@@ -1,5 +1,6 @@
 package io.github.kostack.fixtures
 
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -15,14 +16,13 @@ class AutoConfiguration {
   fun referenceRepository() = ReferenceRepository()
 
   @Bean
-  @ConditionalOnBean(Purger::class)
   @ConditionalOnMissingBean
   fun dataFixtureManager(
-    fixtures: List<AbstractFixture>,
+    fixtures: ObjectProvider<AbstractFixture>,
     referenceRepository: ReferenceRepository,
-    purger: Purger,
+    purger: ObjectProvider<Purger>,
     eventPublisher: ApplicationEventPublisher
-  ) = DataFixtureManager(fixtures, referenceRepository, purger, eventPublisher)
+  ) = DataFixtureManager(fixtures.orderedStream().toList(), referenceRepository, purger.ifAvailable, eventPublisher)
 
   @Bean
   @ConditionalOnClass(Command::class)

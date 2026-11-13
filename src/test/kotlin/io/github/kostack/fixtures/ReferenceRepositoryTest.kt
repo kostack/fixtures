@@ -26,7 +26,7 @@ class ReferenceRepositoryTest {
 
     referenceRepository.setReference(referenceName, referenceValue)
 
-    Assertions.assertEquals(referenceValue, referenceRepository.getReference(referenceName))
+    Assertions.assertEquals(referenceValue, referenceRepository.getReference<String>(referenceName))
   }
 
   @Test
@@ -43,12 +43,38 @@ class ReferenceRepositoryTest {
   }
 
   @Test
+  fun `getReference returns the requested type`() {
+    referenceRepository.setReference("count", 42)
+
+    val count: Int = referenceRepository.getReference("count")
+
+    assertEquals(42, count)
+    assertEquals(42, referenceRepository.getReference("count", Int::class.javaObjectType))
+  }
+
+  @Test
+  fun `getReference throws for missing reference`() {
+    val exception = assertFailsWith<IllegalStateException> { referenceRepository.getReference<String>("missing") }
+
+    assertEquals("Reference not found: missing", exception.message)
+  }
+
+  @Test
+  fun `getReference throws for wrong type`() {
+    referenceRepository.setReference("name", "value")
+
+    val exception = assertFailsWith<IllegalStateException> { referenceRepository.getReference<Int>("name") }
+
+    assertEquals("Reference name is java.lang.String, not java.lang.Integer", exception.message)
+  }
+
+  @Test
   fun `setReference does not affect other references`() {
     referenceRepository.setReference("testReference1", "value1")
     referenceRepository.setReference("testReference2", "value2")
 
-    assertEquals("value1", referenceRepository.getReference("testReference1"))
-    assertEquals("value2", referenceRepository.getReference("testReference2"))
+    assertEquals("value1", referenceRepository.getReference<String>("testReference1"))
+    assertEquals("value2", referenceRepository.getReference<String>("testReference2"))
   }
 
   @Test
@@ -81,7 +107,7 @@ class ReferenceRepositoryTest {
       val acceptedValues = writes.mapNotNull { it.get(5, TimeUnit.SECONDS) }
 
       assertEquals(1, acceptedValues.size)
-      assertEquals(acceptedValues.single(), referenceRepository.getReference("shared"))
+      assertEquals(acceptedValues.single(), referenceRepository.getReference<Int>("shared"))
     } finally {
       start.countDown()
       executor.shutdownNow()

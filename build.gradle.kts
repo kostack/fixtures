@@ -30,9 +30,6 @@ dependencies {
   // API
   api("net.datafaker:datafaker:2.7.0")
 
-  // Implementation
-  implementation("org.fusesource.jansi:jansi:2.4.2")
-
   // Build and tests only: the Spring Boot and Spring Shell BOMs manage all versions below and are not published.
   listOf(
     platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"),

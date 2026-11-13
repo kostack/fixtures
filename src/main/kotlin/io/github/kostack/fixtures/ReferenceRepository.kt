@@ -12,7 +12,18 @@ class ReferenceRepository {
     require(references.putIfAbsent(name, value) == null) { "Reference $name already exists" }
   }
 
-  fun getReference(name: String): Any = references[name] ?: error("Reference not found: $name")
+  fun <T : Any> getReference(
+    name: String,
+    type: Class<T>
+  ): T {
+    val value = references[name] ?: error("Reference not found: $name")
+    check(type.isInstance(value)) {
+      "Reference $name is ${value::class.java.name}, not ${type.name}"
+    }
+    return type.cast(value)
+  }
+
+  inline fun <reified T : Any> getReference(name: String): T = getReference(name, T::class.javaObjectType)
 
   fun reset() = references.clear()
 }
