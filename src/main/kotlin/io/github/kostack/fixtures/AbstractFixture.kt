@@ -7,9 +7,8 @@ abstract class AbstractFixture {
   @Autowired
   protected lateinit var referenceRepository: ReferenceRepository
 
-  abstract suspend fun load()
+  @Autowired
+  protected lateinit var faker: Faker
 
-  companion object {
-    val faker = Faker()
-  }
+  abstract suspend fun load()
 }

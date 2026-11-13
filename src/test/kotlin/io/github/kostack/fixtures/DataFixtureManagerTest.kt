@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 @SpringBootTest(classes = [TestApplication::class])
 class DataFixtureManagerTest {
@@ -68,11 +69,12 @@ class DataFixtureManagerTest {
       every { referenceRepository.reset() } returns Unit
 
       val exception =
-        assertFailsWith<RuntimeException> {
+        assertFailsWith<FixtureLoadException> {
           dataFixtureManager.loadFixtures(false)
         }
 
-      assertEquals("Fixture1 load failed", exception.message)
+      assertEquals("Fixture1 load failed", exception.cause?.message)
+      assertTrue(exception.message!!.startsWith("Failed to load "), exception.message)
 
       coVerify(exactly = 1) { fixture1.load() }
       coVerify(exactly = 0) { fixture2.load() }

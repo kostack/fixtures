@@ -54,9 +54,15 @@ class ReferenceRepositoryTest {
 
   @Test
   fun `getReference throws for missing reference`() {
+    referenceRepository.setReference("b", 2)
+    referenceRepository.setReference("a", 1)
+
     val exception = assertFailsWith<IllegalStateException> { referenceRepository.getReference<String>("missing") }
 
-    assertEquals("Reference not found: missing", exception.message)
+    assertEquals(
+      "Reference not found: missing (available: a, b). Make sure the fixture that sets it loads first, for example with @Order.",
+      exception.message
+    )
   }
 
   @Test

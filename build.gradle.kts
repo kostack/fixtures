@@ -37,8 +37,8 @@ dependencies {
   ).forEach {
     compileOnly(it)
     testImplementation(it)
+    testFixturesImplementation(it)
   }
-  testFixturesImplementation(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
 
   // Provided by the consuming application; not published as dependencies.
   listOf(
@@ -49,6 +49,8 @@ dependencies {
   ).forEach {
     compileOnly(it)
     testImplementation(it)
+    // TestApplication runs on the test fixtures' classpath, so it needs Spring Shell and coroutines too.
+    testFixturesImplementation(it)
   }
 
   testImplementation("org.springframework.boot:spring-boot-starter-test")

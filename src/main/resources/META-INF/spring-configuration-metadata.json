@@ -1,0 +1,19 @@
+{
+  "groups": [
+    {
+      "name": "kostack.fixtures",
+      "type": "io.github.kostack.fixtures.FixturesProperties",
+      "sourceType": "io.github.kostack.fixtures.FixturesProperties",
+      "description": "Kostack data fixtures configuration."
+    }
+  ],
+  "properties": [
+    {
+      "name": "kostack.fixtures.faker-seed",
+      "type": "java.lang.Long",
+      "sourceType": "io.github.kostack.fixtures.FixturesProperties",
+      "description": "Seed for the Faker used by fixtures. When set, the seed is reapplied at the start of every load, so each run generates the same data. When unset, data differs on every run."
+    }
+  ],
+  "hints": []
+}

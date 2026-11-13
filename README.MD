@@ -50,7 +50,7 @@ The library brings in only Datafaker (exposed as API). Spring context, Boot auto
 
 ## Auto-configuration
 
-Spring Boot discovers `AutoConfiguration` automatically. It registers a `ReferenceRepository`, unless the application already provides one, and a `DataFixtureManager` that collects the application's `AbstractFixture` beans in `@Order` order. A `Purger` bean is optional; it is only needed to drop the database.
+Spring Boot discovers `FixturesAutoConfiguration` automatically. It registers a `ReferenceRepository` and a `Faker`, each unless the application already provides one, and a `DataFixtureManager` that collects the application's `AbstractFixture` beans in `@Order` order. A `Purger` bean is optional; it is only needed to drop the database.
 
 When the manager and Spring Shell command API are available, auto-configuration also registers `LoadFixturesCommand`, unless the application already provides that bean. Shell discovers its `@Command` method on the registered bean; the command class does not need `@Component` or component scanning. Application fixtures and purgers still need to be registered as beans, for example with `@Component`.
 
@@ -97,7 +97,7 @@ class UserFixture(
 }
 ```
 
-- `faker` is a built-in `net.datafaker.Faker` instance available on the companion object.
+- `faker` is a `net.datafaker.Faker` injected from the base class. See [Reproducible Data](#reproducible-data) to seed it.
 - `referenceRepository` is auto-wired from the base class.
 
 ---
@@ -137,6 +137,13 @@ class ProjectFixture(
 ```
 
 > **Note:** Fixture loading is sequential, so load order matters. Ensure the fixture that sets a reference is loaded before the one that reads it, for example by using Spring's `@Order` on fixture classes (lower values load first).
+
+If a fixture fails, loading stops and `loadFixtures` throws `FixtureLoadException`, naming the failing fixture and those loaded before it. A missing reference also lists the references that exist:
+
+```
+FixtureLoadException: Failed to load ProjectFixture (loaded before it: UserFixture):
+  Reference not found: acme-org (available: admin-user). Make sure the fixture that sets it loads first, for example with @Order.
+```
 
 `ReferenceRepository` uses a `ConcurrentHashMap` for concurrent reads and writes. Registering a name is atomic: if concurrent callers register the same name, one succeeds and the others receive `IllegalArgumentException`. Existing values are preserved. `getReference<T>(name)` returns the reference as `T` and throws `IllegalStateException` if the name does not exist or the stored value is not a `T`. Java callers can use `getReference(name, Type.class)`. Stored objects themselves must be safe for any concurrent use by the application.
 
@@ -196,6 +203,20 @@ To only drop the database without loading fixtures (a suspend function, like `lo
 ```kotlin
 dataFixtureManager.dropDatabase()
 ```
+
+---
+
+## Reproducible Data
+
+By default, `faker` generates different data on every run. Set a seed to make it reproducible:
+
+```yaml
+kostack:
+  fixtures:
+    faker-seed: 42
+```
+
+The seed is reapplied at the start of every `loadFixtures` call, so each run, including repeated runs in the same application, generates the same data as long as fixtures load in the same order. If the application defines its own `Faker` bean, fixtures use that one instead; the seed is applied to it if it is backed by `java.util.Random`, as `Faker(Random(...))` is.
 
 ---
 

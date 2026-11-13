@@ -1,6 +1,7 @@
 package io.github.kostack.fixtures
 
 import kotlinx.coroutines.runBlocking
+import net.datafaker.Faker
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -11,10 +12,10 @@ import org.springframework.shell.core.command.Command
 import java.util.function.Supplier
 import kotlin.test.assertFailsWith
 
-class AutoConfigurationTest {
+class FixturesAutoConfigurationTest {
   private val contextRunner =
     ApplicationContextRunner()
-      .withConfiguration(AutoConfigurations.of(AutoConfiguration::class.java))
+      .withConfiguration(AutoConfigurations.of(FixturesAutoConfiguration::class.java))
 
   @Test
   fun `creates fixture manager without purger or fixtures`() {
@@ -112,5 +113,80 @@ class AutoConfigurationTest {
         assertThat(context).hasSingleBean(DataFixtureManager::class.java)
         assertThat(context).doesNotHaveBean(LoadFixturesCommand::class.java)
       }
+  }
+
+  @Test
+  fun `seeded faker generates the same data on every load`() {
+    val names = mutableListOf<String>()
+
+    contextRunner
+      .withPropertyValues("kostack.fixtures.faker-seed=42")
+      .withBean("nameFixture", AbstractFixture::class.java, Supplier { NameFixture(names) })
+      .run { context ->
+        val manager = context.getBean(DataFixtureManager::class.java)
+
+        runBlocking {
+          manager.loadFixtures(dropDatabase = false)
+          manager.loadFixtures(dropDatabase = false)
+        }
+      }
+    contextRunner
+      .withPropertyValues("kostack.fixtures.faker-seed=42")
+      .withBean("nameFixture", AbstractFixture::class.java, Supplier { NameFixture(names) })
+      .run { context ->
+        runBlocking { context.getBean(DataFixtureManager::class.java).loadFixtures(dropDatabase = false) }
+      }
+
+    assertThat(names).hasSize(3)
+    assertThat(names.toSet()).hasSize(1)
+  }
+
+  @Test
+  fun `backs off when the application provides its own faker`() {
+    val faker = Faker()
+
+    contextRunner
+      .withBean(Faker::class.java, Supplier { faker })
+      .run { context ->
+        assertThat(context).hasSingleBean(Faker::class.java)
+        assertThat(context.getBean(Faker::class.java)).isSameAs(faker)
+      }
+  }
+
+  @Test
+  fun `failing fixture reports the fixtures loaded before it`() {
+    contextRunner
+      .withBean("first", AbstractFixture::class.java, Supplier { OrderedFixture(1, "first", mutableListOf()) })
+      .withBean("failing", AbstractFixture::class.java, Supplier { FailingFixture() })
+      .run { context ->
+        val manager = context.getBean(DataFixtureManager::class.java)
+
+        val exception =
+          assertFailsWith<FixtureLoadException> { runBlocking { manager.loadFixtures(dropDatabase = false) } }
+
+        assertThat(
+          exception
+        ).hasMessageStartingWith(
+          "Failed to load FailingFixture (loaded before it: OrderedFixture): Reference not found: missing"
+        )
+      }
+  }
+
+  private class NameFixture(
+    private val names: MutableList<String>
+  ) : AbstractFixture() {
+    override suspend fun load() {
+      names += faker.name().fullName()
+    }
+  }
+
+  private class FailingFixture :
+    AbstractFixture(),
+    Ordered {
+    override fun getOrder() = 2
+
+    override suspend fun load() {
+      referenceRepository.getReference<String>("missing")
+    }
   }
 }
